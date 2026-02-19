@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+redis
+docker
+pydantic
+yt-dlp

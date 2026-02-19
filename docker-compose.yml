@@ -1,0 +1,54 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-SuperSecretRedisPassword123!}
+    networks:
+      - backend_net
+
+  vpn:
+    image: qmcgaw/gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=nordvpn
+      - OPENVPN_USER=${NORDVPN_USER}
+      - OPENVPN_PASSWORD=${NORDVPN_PASS}
+      - SERVER_COUNTRIES=${NORDVPN_COUNTRY:-}
+      - HTTPPROXY=on
+    networks:
+      - worker_net
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD:-SuperSecretRedisPassword123!}@redis:6379/0
+      DATA_DIR: /data
+      WORKER_IMAGE: pinchana-worker:latest
+      WORKER_NETWORK: pinchana-dlp_worker_net
+      VPN_PROXY_URL: http://vpn:8888
+      API_PUBLIC_URL: http://api:8080
+      API_ROOT_PATH: ${API_ROOT_PATH:-}
+      JOB_KEY_TTL_SECONDS: "3600"
+      HOST_DATA_DIR: ${PWD}/data
+    volumes:
+      - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports: ["${API_BIND_HOST:-0.0.0.0}:${API_PORT:-8080}:8080"]
+    depends_on: [redis, vpn]
+    networks:
+      - backend_net
+      - worker_net
+      - vpn_net
+
+networks:
+  backend_net:
+    driver: bridge
+    internal: true
+  worker_net:
+    driver: bridge
+  vpn_net:
+    driver: bridge
+    internal: true
